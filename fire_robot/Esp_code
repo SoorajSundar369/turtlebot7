@@ -1,0 +1,116 @@
+// 🔌 ESP32 ROS 2 Closed-Loop Motor Controller (Calibrated)
+
+const int enA = 14; const int in1 = 13; const int in2 = 12; // Left Motor
+const int enB = 25; const int in3 = 27; const int in4 = 26; // Right Motor
+const int encA_C1 = 32; // Left Encoder
+const int encB_C1 = 34; // Right Encoder
+
+volatile long left_encoder_count = 0;
+volatile long right_encoder_count = 0;
+
+void IRAM_ATTR leftEncoderISR() { left_encoder_count++; }
+void IRAM_ATTR rightEncoderISR() { right_encoder_count++; }
+
+float Kp = 0.1;  
+float Ki = 0.5;  
+float Kd = 0.0;  
+
+float target_left_speed = 0.0;
+float target_right_speed = 0.0;
+
+unsigned long previous_time = 0;
+float left_error_sum = 0; 
+float right_error_sum = 0;
+
+const int MIN_PWM = 90; 
+const float M_S_TO_TICKS = 585.17; // Calibrated for 43mm wheels, 1581 PPR, 50ms loop
+
+String serialBuffer = "";
+
+void setup() {
+  Serial.begin(115200);
+  
+  pinMode(enA, OUTPUT); pinMode(in1, OUTPUT); pinMode(in2, OUTPUT);
+  pinMode(enB, OUTPUT); pinMode(in3, OUTPUT); pinMode(in4, OUTPUT);
+  pinMode(encA_C1, INPUT_PULLUP);
+  pinMode(encB_C1, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(encA_C1), leftEncoderISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(encB_C1), rightEncoderISR, RISING);
+  
+  digitalWrite(in1, HIGH); digitalWrite(in2, LOW); analogWrite(enA, 255);
+  digitalWrite(in3, HIGH); digitalWrite(in4, LOW); analogWrite(enB, 255);
+  delay(200);
+  digitalWrite(in1, LOW); digitalWrite(in2, LOW); analogWrite(enA, 0);
+  digitalWrite(in3, LOW); digitalWrite(in4, LOW); analogWrite(enB, 0);
+  
+  Serial.println("READY");
+}
+
+void loop() {
+  while (Serial.available() > 0) {
+    char incomingChar = (char)Serial.read();
+    if (incomingChar == '\n') {
+      serialBuffer.trim(); 
+      float linear_vel = 0.0;
+      float angular_vel = 0.0;
+      int parsed = sscanf(serialBuffer.c_str(), "L:%f,A:%f", &linear_vel, &angular_vel);
+      if (parsed == 2) {
+        Serial.print("OK:");
+        Serial.println(linear_vel);
+        float wheel_separation = 0.3; 
+        target_left_speed  = linear_vel - (angular_vel * wheel_separation / 2.0);
+        target_right_speed = linear_vel + (angular_vel * wheel_separation / 2.0);
+      } else {
+        Serial.print("ERR:");
+        Serial.println(serialBuffer);
+      }
+      serialBuffer = ""; 
+    } else {
+      serialBuffer += incomingChar;
+    }
+  }
+
+  unsigned long current_time = millis();
+  if (current_time - previous_time >= 50) {
+    long current_left_ticks = left_encoder_count;
+    long current_right_ticks = right_encoder_count;
+    left_encoder_count = 0;
+    right_encoder_count = 0;
+    previous_time = current_time;
+
+    int left_pwm = computePID(target_left_speed, current_left_ticks, left_error_sum);
+    setMotor(in1, in2, enA, target_left_speed, left_pwm);
+
+    int right_pwm = computePID(target_right_speed, current_right_ticks, right_error_sum);
+    setMotor(in3, in4, enB, target_right_speed, right_pwm);
+  }
+}
+
+int computePID(float target_velocity_ms, long actual_ticks, float &error_sum) {
+  if (abs(target_velocity_ms) < 0.01) {
+    error_sum = 0; 
+    return 0;
+  }
+  float target_ticks = abs(target_velocity_ms) * M_S_TO_TICKS;
+  float error = target_ticks - (float)actual_ticks;
+  error_sum += error;
+  error_sum = constrain(error_sum, -1000, 1000);
+  float pid_output = (Kp * error) + (Ki * error_sum);
+  
+  int final_pwm = abs(pid_output);
+  if (final_pwm > 0) {
+    final_pwm += MIN_PWM;
+  }
+  return constrain(final_pwm, 0, 255);
+}
+
+void setMotor(int pinFwd, int pinRev, int pwmPin, float target_velocity, int pwm_value) {
+  if (target_velocity > 0.01) {
+    digitalWrite(pinFwd, HIGH); digitalWrite(pinRev, LOW); analogWrite(pwmPin, pwm_value);
+  } else if (target_velocity < -0.01) {
+    digitalWrite(pinFwd, LOW); digitalWrite(pinRev, HIGH); analogWrite(pwmPin, pwm_value);
+  } else {
+    digitalWrite(pinFwd, LOW); digitalWrite(pinRev, LOW); analogWrite(pwmPin, 0);
+  }
+}
