@@ -1,0 +1,75 @@
+<?xml version="1.0"?>
+<robot name="fire_robot">
+
+    <!-- BASE LINK (The center of the robot) -->
+    <link name="base_link">
+        <visual>
+            <geometry>
+                <box size="0.14 0.14 0.009"/>
+            </geometry>
+            <material name="blue">
+                <color rgba="0 0 0.8 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <!-- RIGHT WHEEL -->
+    <link name="right_wheel">
+        <visual>
+            <geometry>
+                <cylinder radius="0.0215" length="0.015"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="base_to_right_wheel" type="continuous">
+        <parent link="base_link"/>
+        <child link="right_wheel"/>
+        <!-- Positioned halfway back, shifted right by half the 152mm wheelbase -->
+        <origin xyz="0 -0.076 0" rpy="1.5708 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <!-- LEFT WHEEL -->
+    <link name="left_wheel">
+        <visual>
+            <geometry>
+                <cylinder radius="0.0215" length="0.015"/>
+            </geometry>
+            <material name="black">
+                <color rgba="0 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="base_to_left_wheel" type="continuous">
+        <parent link="base_link"/>
+        <child link="left_wheel"/>
+        <!-- Positioned halfway back, shifted left by half the 152mm wheelbase -->
+        <origin xyz="0 0.076 0" rpy="-1.5708 0 0"/>
+        <axis xyz="0 0 1"/>
+    </joint>
+
+    <!-- LASER SCANNER -->
+    <link name="laser_frame">
+        <visual>
+            <geometry>
+                <cylinder radius="0.03" length="0.04"/>
+            </geometry>
+            <material name="red">
+                <color rgba="0.8 0 0 1"/>
+            </material>
+        </visual>
+    </link>
+
+    <joint name="base_to_laser" type="fixed">
+        <parent link="base_link"/>
+        <child link="laser_frame"/>
+        <!-- Mounted dead center, 5cm above the base_link -->
+        <origin xyz="0 0 0.05" rpy="0 0 0"/>
+    </joint>
+
+</robot>
