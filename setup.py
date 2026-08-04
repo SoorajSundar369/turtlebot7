@@ -24,7 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'fire_bridge = fire_robot.fire_bridge:main'
+            'fire_bridge = fire_robot.fire_bridge:main',
+             'sim_bridge = fire_robot.sim_bridge:main', 
         ],
     },
 )

@@ -5,7 +5,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     
-    # Path to your URDF file
     urdf_file = os.path.join(
         get_package_share_directory('fire_robot'),
         'description',
@@ -24,23 +23,33 @@ def generate_launch_description():
             output='screen',
             parameters=[{'robot_description': robot_desc}]
         ),
-        
-        # 2. Your ESP32 Bridge (Motors & Odometry)
+
+        # 2. Joint State Publisher (ADDED)
+        # Publishes /joint_states so robot_state_publisher can complete
+        # the TF chain out to right_wheel / left_wheel.
+        Node(
+            package='joint_state_publisher',
+            executable='joint_state_publisher',
+            name='joint_state_publisher',
+            output='screen'
+        ),
+
+        # 3. Your ESP32 Bridge (Motors & Odometry)
         Node(
             package='fire_robot',
-            executable='fire_bridge',
-            name='fire_bridge',
+            executable='sim_bridge', # was 'fire_bridge'
+            name='sim_bridge',
             output='screen'
         ),
         
-        # 3. The RPLidar Driver
+        # 4. The RPLidar Driver
         Node(
             package='rplidar_ros',
             executable='rplidar_composition',
             name='rplidar_node',
             output='screen',
             parameters=[{
-                'serial_port': '/dev/ttyUSB0', # MAKE SURE THIS IS CORRECT
+                'serial_port': '/dev/ttyUSB0',
                 'frame_id': 'laser_frame',
                 'angle_compensate': True,
                 'scan_mode': 'Standard'
