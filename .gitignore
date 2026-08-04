@@ -1,0 +1,11 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# ROS 2 build files
+/build/
+/install/
+/log/
+
+# OS generated files
+.DS_Store
