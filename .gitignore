@@ -2,10 +2,14 @@
 __pycache__/
 *.pyc
 
-# ROS 2 build files
-/build/
-/install/
-/log/
+# ROS 2 build files (any directory depth)
+build/
+install/
+log/
 
 # OS generated files
 .DS_Store
+
+# TF debug output
+*.pdf
+*.gv

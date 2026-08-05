@@ -25,7 +25,10 @@ setup(
     entry_points={
         'console_scripts': [
             'fire_bridge = fire_robot.fire_bridge:main',
-             'sim_bridge = fire_robot.sim_bridge:main', 
+             'sim_bridge = fire_robot.sim_bridge:main',
+             'drive_test_monitor = fire_robot.drive_test_monitor:main',
+             'fake_scan = fire_robot.fake_scan:main',  
+             'rotation_test_monitor = fire_robot.rotation_test_monitor:main',
         ],
     },
 )

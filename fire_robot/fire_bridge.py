@@ -26,15 +26,17 @@ class ESP32BridgeNode(Node):
         self.theta = 0.0
         self.last_time = self.get_clock().now()
 
+        # Last known velocity -- kept so the idle-publish timer has
+        # something sensible to report when no new ticks have arrived.
+        self.last_v_linear = 0.0
+        self.last_v_angular = 0.0
+
         # --- Publishers & Subscribers created FIRST, unconditionally ---
-        # This way, even if the serial connection below fails, /cmd_vel is
-        # still subscribed and /odom still exists -- the node just won't be
-        # able to talk to the ESP32.
         self.subscription = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        # --- Serial connection is now optional ---
+        # --- Serial connection is optional ---
         self.ser = None
         try:
             self.ser = serial.Serial(self.port, self.baud_rate, timeout=0.1)
@@ -46,15 +48,20 @@ class ESP32BridgeNode(Node):
                 f"Node will keep running but motors/encoders are disconnected."
             )
 
-        # Only start the read thread if serial actually connected
         if self.ser is not None:
             self.read_thread = threading.Thread(target=self.read_serial)
             self.read_thread.daemon = True
             self.read_thread.start()
 
+        # NEW: publish odom/TF on a fixed timer regardless of whether new
+        # encoder ticks have arrived. This keeps odom -> base_link fresh
+        # in RViz/TF even when the robot is sitting still (no ticks =
+        # no calls to update_odometry from read_serial).
+        self.publish_timer = self.create_timer(0.05, self.publish_current_state)
+
     def cmd_vel_callback(self, msg):
         if self.ser is None:
-            return  # no hardware connected, nothing to write to
+            return
         command = f"L:{msg.linear.x:.2f},A:{msg.angular.z:.2f}\n"
         try:
             self.ser.write(command.encode('utf-8'))
@@ -77,7 +84,8 @@ class ESP32BridgeNode(Node):
         dt = (current_time - self.last_time).nanoseconds / 1e9
         self.last_time = current_time
 
-        if dt <= 0: return
+        if dt <= 0:
+            return
 
         distance_per_tick = (2 * math.pi * self.wheel_radius) / self.ticks_per_rev
         d_left = left_ticks * distance_per_tick
@@ -93,7 +101,18 @@ class ESP32BridgeNode(Node):
         self.y += d_center * math.sin(self.theta + (d_theta / 2.0))
         self.theta += d_theta
 
+        # Remember these so the idle timer can report the last known
+        # velocity instead of always showing zero right after motion stops.
+        self.last_v_linear = v_linear
+        self.last_v_angular = v_angular
+
         self.publish_odom(v_linear, v_angular)
+
+    def publish_current_state(self):
+        """Timer callback: re-publish the current pose/TF at a fixed rate,
+        even if no new encoder ticks have come in. Prevents odom->base_link
+        from going stale when the robot is stationary."""
+        self.publish_odom(self.last_v_linear, self.last_v_angular)
 
     def publish_odom(self, v_linear, v_angular):
         q_z = math.sin(self.theta / 2.0)
@@ -102,7 +121,7 @@ class ESP32BridgeNode(Node):
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
+        t.child_frame_id = 'base_footprint'            # was 'base_link'
         t.transform.translation.x = self.x
         t.transform.translation.y = self.y
         t.transform.rotation.z = q_z
@@ -112,7 +131,7 @@ class ESP32BridgeNode(Node):
         odom = Odometry()
         odom.header.stamp = t.header.stamp
         odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
+        odom.child_frame_id = 'base_footprint'       # was 'base_link'
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation = t.transform.rotation

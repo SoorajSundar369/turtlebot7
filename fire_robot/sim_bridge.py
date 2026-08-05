@@ -118,7 +118,7 @@ class SimBridgeNode(Node):
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
+        t.child_frame_id = 'base_footprint'        # base_link
         t.transform.translation.x = self.x
         t.transform.translation.y = self.y
         t.transform.rotation.z = q_z
@@ -128,7 +128,7 @@ class SimBridgeNode(Node):
         odom = Odometry()
         odom.header.stamp = t.header.stamp
         odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
+        odom.child_frame_id = 'base_footprint'     #base_link
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation = t.transform.rotation
